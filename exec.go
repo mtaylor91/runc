@@ -85,6 +85,10 @@ following will output a list of processes running in the container:
 			Usage:  "disable the use of the subreaper used to reap reparented processes",
 			Hidden: true,
 		},
+		cli.BoolFlag{
+			Name:  "preserve-environment",
+			Usage: "preserve environment variables from the calling process",
+		},
 	},
 	Action: func(context *cli.Context) error {
 		if err := checkArgs(context, 1, minArgs); err != nil {
@@ -183,6 +187,21 @@ func getProcess(context *cli.Context, bundle string) (*specs.Process, error) {
 	}
 	// append the passed env variables
 	p.Env = append(p.Env, context.StringSlice("env")...)
+	// append environment variables from calling process (if not already set)
+	if context.IsSet("preserve-environment") {
+		for _, callerVar := range os.Environ() {
+			varName := strings.Split(callerVar, "=")[0]
+			varDefined := false
+			for _, targetVar := range p.Env {
+				if strings.HasPrefix(targetVar, varName+"=") {
+					varDefined = true
+				}
+			}
+			if !varDefined {
+				p.Env = append(p.Env, callerVar)
+			}
+		}
+	}
 
 	// set the tty
 	if context.IsSet("tty") {
